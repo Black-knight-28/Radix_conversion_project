@@ -9,6 +9,7 @@ and is designed to run on an FPGA.
 - Uses seven-segment displays for output
 - Input is provided using FPGA buttons
 - Implemented using SystemVerilog
+- Has a window of 8 bits, so outputs as long as 16 bits can be represented in here. 
 
 ## Project Files
 
