@@ -41,4 +41,4 @@ Input number: 25
 Input radix: 10
 Output radix: 2
 
-<img width="899" height="1599" alt="image" src="https://github.com/user-attachments/assets/2f00e48a-7605-4a78-bbb9-2e59509b5bd0" />
+<img width="600" height="877" alt="image" src="https://github.com/user-attachments/assets/2f00e48a-7605-4a78-bbb9-2e59509b5bd0" />
