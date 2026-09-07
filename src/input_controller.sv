@@ -15,7 +15,8 @@ module input_controller(
     
     output logic [3:0] input_radix,
     output logic [3:0] output_radix,
-    output logic convert_enable
+    output logic convert_enable,
+    output logic [1:0] fsm_state
     );
     
    // declaring the FSM datatype
@@ -31,6 +32,7 @@ module input_controller(
    
    state_t state;
    state_t next_state;
+   assign fsm_state = state;
    
    always_ff @(posedge clk) begin
     

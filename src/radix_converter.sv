@@ -41,10 +41,103 @@ module radix_converter(
     
     logic [3:0] output_digit [0:15];
     
+    // getting the FSM state
+    logic [1:0] fsm_state;
+    
+    // getting the live digits from the switches
+    
+    logic [3:0] live_digit [0:15];
+    
+    //adding the disp data, the data we wannan display
+    logic [3:0] display_data [0:15];
+    
     // debouncer variables
     logic center_pressed;
     logic right_pressed;
     logic left_pressed;
+    
+    // mapping the switches to the 7 seg disp
+    
+    always_comb 
+    begin 
+        
+            // clear all the live display
+            for(int i = 0; i < 16; i = i+1)
+            begin
+            
+                    live_digit[i] = 4'b0000;
+            
+            end
+            
+            // mapping the switches to the display
+            live_digit[15] = SW[3:0];
+            live_digit[14] = SW[7:4];
+            live_digit[13] = SW[11:8];
+            live_digit[12] = SW[15:12];
+            
+    
+    end
+    
+    
+    // choosing which data will be sent to the 7-seg disp based
+    // on the FSM state
+    
+    always_comb
+    begin 
+            
+            //clear the display by default 
+            for(int i = 0; i < 16; i=i+1)
+            begin 
+                    
+                    display_data[i] = 4'b0000;
+                    
+            end
+            
+            case(fsm_state)
+            
+                    
+                    // S numebr: show the input number
+                    2'b00: 
+                    begin 
+                            
+                            for(int i = 0; i<16; i=i+1)
+                            begin 
+                            
+                                    display_data[i] = live_digit[i];
+                            
+                            end
+                            
+                    end
+                    
+                    // for the input radix, S_radix
+                    2'b01:
+                    begin 
+                            display_data[15] = SW[3:0];
+                    end
+                    
+                    //for the output radix, S_output_radix
+                    2'b10:
+                    begin 
+                            display_data[15] = SW[3:0];
+                    end
+                    
+                    //for the output, show the ocnverted numbers
+                    2'b11: 
+                    begin
+                            for(int i=0; i<16;i=i+1)
+                            begin
+                                    display_data[i] = output_digit[i];
+                            end
+                    end
+                    
+                    default: 
+                    begin 
+                            //keep the displ cleared
+                    end
+            
+            endcase
+            
+    end
     
     // getting the input controller
     input_controller input_ctrl (
@@ -60,7 +153,8 @@ module radix_converter(
             .digit0(digit0),
             .input_radix(input_radix),
             .output_radix(output_radix),
-            .convert_enable(convert_enable)      
+            .convert_enable(convert_enable),
+            .fsm_state(fsm_state)      
     );
     
     // getting the input_to_integer, second module 
@@ -91,7 +185,7 @@ module radix_converter(
             .clk(clk),
             .reset(reset),
             
-            .output_digit(output_digit),
+            .output_digit(display_data),
             
             .btn_right(right_pressed),
             .btn_left(left_pressed),
