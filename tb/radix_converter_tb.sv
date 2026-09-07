@@ -1,488 +1,415 @@
 `timescale 1ns / 1ps
 
-module radix_converter_tb;
+module tb_radix_converter;
 
-    // =====================================================
-    // Inputs to top module
-    // =====================================================
+    // ============================================================
+    // INPUTS
+    // ============================================================
 
     logic clk;
-    logic reset;
-
+    logic reset_n;
     logic btn_center;
+    logic [15:0] SW;
     logic btn_right;
     logic btn_left;
 
-    logic [15:0] SW;
-
-
-    // =====================================================
-    // Outputs from top module
-    // =====================================================
+    // ============================================================
+    // OUTPUTS
+    // ============================================================
 
     logic [6:0] seg;
     logic [7:0] an;
 
+    // ============================================================
+    // DUT
+    // ============================================================
 
-    // =====================================================
-    // Instantiate complete radix converter
-    // =====================================================
-
-    radix_converter uut (
-
+    radix_converter dut (
         .clk(clk),
-        .reset(reset),
-
+        .reset_n(reset_n),
         .btn_center(btn_center),
+        .SW(SW),
         .btn_right(btn_right),
         .btn_left(btn_left),
-
-        .SW(SW),
-
         .seg(seg),
         .an(an)
-
     );
 
-
-    // =====================================================
-    // 100 MHz clock
-    //
+    // ============================================================
+    // 100 MHz CLOCK
     // Period = 10 ns
-    // =====================================================
+    // ============================================================
 
     initial begin
-
         clk = 1'b0;
-
         forever #5 clk = ~clk;
-
     end
 
-
-    // =====================================================
-    // Convert digit value to printable character
-    // =====================================================
-
-    function automatic [7:0] digit_to_char(
-        input logic [3:0] digit
-    );
-
-        case (digit)
-
-            4'd0:  digit_to_char = "0";
-            4'd1:  digit_to_char = "1";
-            4'd2:  digit_to_char = "2";
-            4'd3:  digit_to_char = "3";
-            4'd4:  digit_to_char = "4";
-            4'd5:  digit_to_char = "5";
-            4'd6:  digit_to_char = "6";
-            4'd7:  digit_to_char = "7";
-            4'd8:  digit_to_char = "8";
-            4'd9:  digit_to_char = "9";
-            4'd10: digit_to_char = "A";
-            4'd11: digit_to_char = "B";
-            4'd12: digit_to_char = "C";
-            4'd13: digit_to_char = "D";
-            4'd14: digit_to_char = "E";
-
-            default: digit_to_char = "?";
-
-        endcase
-
-    endfunction
-
-
-    // =====================================================
-    // CENTER BUTTON PRESS
+    // ============================================================
+    // FAST CENTER PRESS
     //
-    // Keep button HIGH for 15 ms so that the
-    // debouncer accepts it.
+    // We bypass the real 10 ms debouncer.
     //
-    // Then keep it LOW for 15 ms so that the
-    // debouncer recognizes the release.
-    // =====================================================
+    // CENTER is HIGH for exactly ONE clock edge.
+    // Therefore one simulated press causes exactly one
+    // FSM transition and one data capture.
+    // ============================================================
 
-    task automatic press_center;
-
+    task center;
         begin
 
-            $display("");
-            $display("Pressing CENTER...");
+            $display(">>> CENTER = 1");
 
-            btn_center = 1'b1;
+            force dut.center_pressed = 1'b1;
 
-            #15000000;
+            // One clock edge = one button press
+            @(posedge clk);
 
-            btn_center = 1'b0;
+            // Allow nonblocking assignments to update
+            #1;
 
-            #15000000;
+            force dut.center_pressed = 1'b0;
 
-            $display("CENTER released.");
+            $display(">>> CENTER = 0");
 
-        end
+            // Give the design time to settle
+            #10;
 
-    endtask
-
-
-    // =====================================================
-    // RIGHT BUTTON PRESS
-    // =====================================================
-
-    task automatic press_right;
-
-        begin
-
-            $display("");
-            $display("Pressing RIGHT...");
-
-            btn_right = 1'b1;
-
-            #15000000;
-
-            btn_right = 1'b0;
-
-            #15000000;
-
-            $display("RIGHT released.");
+            release dut.center_pressed;
 
         end
-
     endtask
 
+    // ============================================================
+    // PRINT DISPLAY
+    //
+    // Physical display order:
+    //
+    // [8] [9] [10] [11] [12] [13] [14] [15]
+    // LEFT                                      RIGHT
+    // ============================================================
 
-    // =====================================================
-    // LEFT BUTTON PRESS
-    // =====================================================
-
-    task automatic press_left;
-
-        begin
-
-            $display("");
-            $display("Pressing LEFT...");
-
-            btn_left = 1'b1;
-
-            #15000000;
-
-            btn_left = 1'b0;
-
-            #15000000;
-
-            $display("LEFT released.");
-
-        end
-
-    endtask
-
-
-    // =====================================================
-    // Print the 16 output digits
-    // =====================================================
-
-    task automatic print_output_digits;
-
+    task print_display;
         integer i;
 
         begin
 
-            $write("Output digits [0 -> 15]: ");
+            $write("Display LEFT -> RIGHT = ");
 
-            for (i = 0; i < 16; i = i + 1) begin
+            for(i = 8; i <= 15; i = i + 1)
+            begin
 
-                $write(
-                    "%s ",
-                    digit_to_char(uut.output_digit[i])
-                );
+                if(dut.display_data[i] <= 9)
+                    $write("%0d", dut.display_data[i]);
+
+                else
+                    $write(
+                        "%c",
+                        "A" + (dut.display_data[i] - 10)
+                    );
 
             end
 
             $display("");
 
         end
-
     endtask
 
-
-    // =====================================================
-    // Print current conversion result
-    // =====================================================
-
-    task automatic print_conversion_result;
-
-        begin
-
-            $display("");
-            $display("------------------------------------------");
-
-            $display(
-                "Input digits  : %s%s%s%s",
-                digit_to_char(uut.digit3),
-                digit_to_char(uut.digit2),
-                digit_to_char(uut.digit1),
-                digit_to_char(uut.digit0)
-            );
-
-            $display(
-                "Input radix   : %0d",
-                uut.input_radix
-            );
-
-            $display(
-                "Decimal value : %0d",
-                uut.dec_val
-            );
-
-            $display(
-                "Output radix  : %0d",
-                uut.output_radix
-            );
-
-            $display(
-                "Convert enable: %0d",
-                uut.convert_enable
-            );
-
-            print_output_digits();
-
-            $display("------------------------------------------");
-
-        end
-
-    endtask
-
-
-    // =====================================================
+    // ============================================================
     // MAIN TEST
-    // =====================================================
+    // ============================================================
 
     initial begin
 
-        // -------------------------------------------------
-        // Initial conditions
-        // -------------------------------------------------
+        // --------------------------------------------------------
+        // INITIAL VALUES
+        // --------------------------------------------------------
 
-        reset      = 1'b1;
-
+        reset_n    = 1'b0;
         btn_center = 1'b0;
         btn_right  = 1'b0;
         btn_left   = 1'b0;
+        SW         = 16'h0000;
 
-        SW         = 16'd0;
+        // --------------------------------------------------------
+        // RESET
+        // --------------------------------------------------------
 
+        #20;
 
-        // -------------------------------------------------
-        // Reset
-        // -------------------------------------------------
+        reset_n = 1'b1;
 
-        #100;
-
-        reset = 1'b0;
-
-        // Give reset some time to settle
-        #100;
-
-
-        // =================================================
-        // TEST 1
-        //
-        // 1011 base 2 -> base 10
-        //
-        // Expected:
-        //
-        // Decimal value = 11
-        // Output = 11
-        // =================================================
+        #20;
 
         $display("");
-        $display("==========================================");
-        $display("TEST 1: 1011 base 2 -> base 10");
-        $display("==========================================");
+        $display("========================================");
+        $display("RADIX CONVERTER TEST START");
+        $display("========================================");
 
+        $display("FSM after reset = %b", dut.fsm_state);
 
-        // -------------------------------------------------
-        // Enter number
-        // -------------------------------------------------
-
-        SW = 16'h1011;
-
-        press_center();
-
-
-        // -------------------------------------------------
-        // Enter input radix = 2
-        // -------------------------------------------------
-
-        SW = 16'h0002;
-
-        press_center();
-
-
-        // -------------------------------------------------
-        // Enter output radix = 10
-        // 10 = hexadecimal A in SW representation
-        // -------------------------------------------------
-
-        SW = 16'h000A;
-
-        press_center();
-
-
-        // Give combinational logic time to settle
-
-        #100;
-
-
-        // Print result
-
-        print_conversion_result();
-
-
-        // =================================================
-        // TEST RIGHT BUTTON
-        // =================================================
+        // ========================================================
+        // STEP 1: NUMBER = 1234
+        // ========================================================
 
         $display("");
-        $display("==========================================");
-        $display("TEST 1 DISPLAY: RIGHT");
-        $display("==========================================");
-
-        press_right();
-
-        $display(
-            "Scroll select after RIGHT = %0d",
-            uut.display_ctrl.scroll_select
-        );
-
-
-        // =================================================
-        // TEST LEFT BUTTON
-        // =================================================
-
-        $display("");
-        $display("==========================================");
-        $display("TEST 1 DISPLAY: LEFT");
-        $display("==========================================");
-
-        press_left();
-
-        $display(
-            "Scroll select after LEFT = %0d",
-            uut.display_ctrl.scroll_select
-        );
-
-
-        // =================================================
-        // TEST 2
-        //
-        // 1234 base 5 -> base 8
-        //
-        // Expected:
-        //
-        // Decimal value = 194
-        // Output = 302
-        // =================================================
-
-        $display("");
-        $display("");
-        $display("==========================================");
-        $display("TEST 2: 1234 base 5 -> base 8");
-        $display("==========================================");
-
-
-        // -------------------------------------------------
-        // Reset complete system
-        // -------------------------------------------------
-
-        reset = 1'b1;
-
-        #100;
-
-        reset = 1'b0;
-
-        #100;
-
-
-        // -------------------------------------------------
-        // Enter number = 1234
-        // -------------------------------------------------
+        $display("========================================");
+        $display("STEP 1: NUMBER = 1234");
+        $display("========================================");
 
         SW = 16'h1234;
 
-        press_center();
+        #10;
 
+        $display("SW = %h", SW);
 
-        // -------------------------------------------------
-        // Enter input radix = 5
-        // -------------------------------------------------
+        print_display();
 
-        SW = 16'h0005;
-
-        press_center();
-
-
-        // -------------------------------------------------
-        // Enter output radix = 8
-        // -------------------------------------------------
-
-        SW = 16'h0008;
-
-        press_center();
-
-
-        // Give combinational logic time to settle
-
-        #100;
-
-
-        // Print result
-
-        print_conversion_result();
-
-
-        // =================================================
-        // TEST RIGHT
-        // =================================================
+        // Press CENTER once
+        center();
 
         $display("");
-        $display("==========================================");
-        $display("TEST 2 DISPLAY: RIGHT");
-        $display("==========================================");
+        $display("After CENTER:");
 
-        press_right();
+        $display("Captured digit3 = %h", dut.digit3);
+        $display("Captured digit2 = %h", dut.digit2);
+        $display("Captured digit1 = %h", dut.digit1);
+        $display("Captured digit0 = %h", dut.digit0);
 
         $display(
-            "Scroll select after RIGHT = %0d",
-            uut.display_ctrl.scroll_select
+            "Captured number = %h%h%h%h",
+            dut.digit3,
+            dut.digit2,
+            dut.digit1,
+            dut.digit0
         );
 
+        $display("FSM = %b", dut.fsm_state);
 
-        // =================================================
-        // TEST LEFT
-        // =================================================
+        // ========================================================
+        // STEP 2: INPUT RADIX = 10
+        // ========================================================
 
         $display("");
-        $display("==========================================");
-        $display("TEST 2 DISPLAY: LEFT");
-        $display("==========================================");
+        $display("========================================");
+        $display("STEP 2: INPUT RADIX = 10");
+        $display("========================================");
 
-        press_left();
+        SW = 16'h000A;
+
+        #10;
+
+        $display("SW = %h", SW);
+
+        print_display();
+
+        // Press CENTER once
+        center();
+
+        $display("");
+        $display("After CENTER:");
+
+        $display("Input radix = %d", dut.input_radix);
+        $display("FSM = %b", dut.fsm_state);
+
+        // ========================================================
+        // STEP 3: OUTPUT RADIX = 15
+        // ========================================================
+
+        $display("");
+        $display("========================================");
+        $display("STEP 3: OUTPUT RADIX = 15");
+        $display("========================================");
+
+        SW = 16'h000F;
+
+        #10;
+
+        $display("SW = %h", SW);
+
+        print_display();
+
+        // Press CENTER once
+        center();
+
+        $display("");
+        $display("After CENTER:");
+
+        $display("Output radix = %d", dut.output_radix);
+        $display("FSM = %b", dut.fsm_state);
+
+        // ========================================================
+        // STEP 4: CHECK CONVERSION
+        // ========================================================
+
+        $display("");
+        $display("========================================");
+        $display("STEP 4: CHECK CONVERSION");
+        $display("========================================");
+
+        #20;
 
         $display(
-            "Scroll select after LEFT = %0d",
-            uut.display_ctrl.scroll_select
+            "Decimal value = %d",
+            dut.dec_val
         );
 
+        print_display();
 
-        // =================================================
-        // FINISH
-        // =================================================
+        // ========================================================
+        // OUTPUT DIGITS
+        // ========================================================
 
         $display("");
-        $display("==========================================");
-        $display("RADIX CONVERTER INTEGRATION TEST COMPLETE");
-        $display("==========================================");
+        $display("Output digits:");
+
+        $display(
+            "output_digit[15] = %h",
+            dut.output_digit[15]
+        );
+
+        $display(
+            "output_digit[14] = %h",
+            dut.output_digit[14]
+        );
+
+        $display(
+            "output_digit[13] = %h",
+            dut.output_digit[13]
+        );
+
+        $display(
+            "output_digit[12] = %h",
+            dut.output_digit[12]
+        );
+
+        // ========================================================
+        // CHECK FSM
+        // ========================================================
+
+        if(dut.fsm_state == 2'b11)
+            $display("PASS: FSM reached S_ready");
+
+        else
+            $display("FAIL: FSM did not reach S_ready");
+
+        // ========================================================
+        // CHECK NUMBER CAPTURE
+        // ========================================================
+
+        if(dut.digit3 == 4'd1 &&
+           dut.digit2 == 4'd2 &&
+           dut.digit1 == 4'd3 &&
+           dut.digit0 == 4'd4)
+        begin
+
+            $display(
+                "PASS: Number 1234 captured correctly"
+            );
+
+        end
+
+        else
+        begin
+
+            $display(
+                "FAIL: Number was not captured correctly"
+            );
+
+        end
+
+        // ========================================================
+        // CHECK INPUT RADIX
+        // ========================================================
+
+        if(dut.input_radix == 4'd10)
+            $display("PASS: Input radix = 10");
+
+        else
+            $display(
+                "FAIL: Input radix = %d",
+                dut.input_radix
+            );
+
+        // ========================================================
+        // CHECK OUTPUT RADIX
+        // ========================================================
+
+        if(dut.output_radix == 4'd15)
+            $display("PASS: Output radix = 15");
+
+        else
+            $display(
+                "FAIL: Output radix = %d",
+                dut.output_radix
+            );
+
+        // ========================================================
+        // CHECK DECIMAL VALUE
+        // ========================================================
+
+        if(dut.dec_val == 16'd1234)
+            $display("PASS: dec_val = 1234");
+
+        else
+            $display(
+                "FAIL: dec_val = %d",
+                dut.dec_val
+            );
+
+        // ========================================================
+        // CHECK CONVERSION
+        //
+        // 1234 decimal = 574 in base 15
+        //
+        // output_digit[15] = 4
+        // output_digit[14] = 7
+        // output_digit[13] = 5
+        // ========================================================
+
+        if(dut.output_digit[15] == 4 &&
+           dut.output_digit[14] == 7 &&
+           dut.output_digit[13] == 5)
+        begin
+
+            $display(
+                "PASS: Output = 574 (base 15)"
+            );
+
+        end
+
+        else
+        begin
+
+            $display(
+                "FAIL: Output is incorrect"
+            );
+
+            $display(
+                "output_digit[15] = %h",
+                dut.output_digit[15]
+            );
+
+            $display(
+                "output_digit[14] = %h",
+                dut.output_digit[14]
+            );
+
+            $display(
+                "output_digit[13] = %h",
+                dut.output_digit[13]
+            );
+
+        end
+
+        // ========================================================
+        // DONE
+        // ========================================================
+
+        $display("");
+        $display("========================================");
+        $display("TEST COMPLETE");
+        $display("========================================");
 
         $finish;
 
